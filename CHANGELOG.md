@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/pysan3/MLTemplate/compare/v1.0.0...v1.1.0) (2023-08-04)
+
+
+### Features
+
+* Implement missing parts ([#2](https://github.com/pysan3/MLTemplate/issues/2)) ([cd60fa7](https://github.com/pysan3/MLTemplate/commit/cd60fa7219980b0265e4120eee284f8a742017ef))
+
 ## 1.0.0 (2023-08-04)
 
 
