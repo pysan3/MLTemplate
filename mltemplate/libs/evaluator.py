@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from mltemplate.libs.loader.dataset_loader import DatasetTypeBatch
+from .loader.dataset_loader import DatasetTypeBatch
 
 if TYPE_CHECKING:
     from torch import Tensor
 
-    from utils.manager import Manager
+    from mltemplate.utils.manager import Manager
 
 
 class Evaluator:

@@ -6,12 +6,13 @@ from typing import TYPE_CHECKING, Callable
 import torch
 import torch.nn as nn
 
-from mltemplate.libs.loader.dataset_loader import DatasetTypeBatch
-from mltemplate.libs.renderer import make_renderer
-from utils.manager import Manager
+from .loader.dataset_loader import DatasetTypeBatch
+from .renderer import make_renderer
 
 if TYPE_CHECKING:
     from torch import Tensor
+
+    from mltemplate.utils.manager import Manager
 
 CRT_T = Callable[[Tensor, Tensor], Tensor]
 
@@ -64,8 +65,8 @@ class NetworkWrapper(nn.Module):
         loss = loss_diff
 
         return NetworkWrapperResult(
-            result.cpu(),
-            loss.cpu(),
+            result,
+            loss,
             ScalarStats(
                 loss.detach().cpu(),
                 loss_diff.detach().cpu(),

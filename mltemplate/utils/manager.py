@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from dataclasses import asdict, dataclass, field
 from enum import IntEnum
-from logging import Logger, getLogger
+from logging import getLogger
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from hydra import compose
 from hydra.initialize import initialize_config_dir
 from omegaconf import DictConfig
+
+if TYPE_CHECKING:
+    from logging import Logger
 
 
 class LOG_LEVELS(IntEnum):
@@ -37,6 +41,7 @@ parser.add_argument(
     help="Set logging level.",
 )
 parser.add_argument("--log_file", type=str, default="", help="If set, logging will be output to file.")
+parser.add_argument("--log_overwrite", action="store_true", help="Will overwrite log file from the beginning.")
 parser.add_argument("-v", "--verbose", action="store_true", help="Shorthand for `--debug=info`.")
 parser.add_argument("-vv", "--veryverbose", action="store_true", help="Shorthand for `--debug=debug`.")
 
@@ -58,9 +63,10 @@ class BaseConfig:
     _frozen_properties = {}
 
     @staticmethod
-    def mkdir(dir: Path):
-        dir.mkdir(parents=True, exist_ok=True)
-        return dir
+    def mkdir(dir_path: Path):
+        from .data_utils import valid_dir
+
+        return valid_dir(dir_path)
 
     def merge_from(self, o: BaseConfig | DictConfig):
         attributes = set(dir(self))
@@ -173,12 +179,12 @@ class Config(BaseConfig):
     TEST: TestConfig = field(default_factory=TestConfig)
     IS_TEST: bool = False
 
-    def train_or_test(self, is_train: Optional[bool] = None):
-        if is_train is None:
-            is_train = self.IS_TEST
-        return self.TRAIN if is_train else self.TEST
+    def train_or_test(self, is_test: Optional[bool] = None):
+        if is_test is None:
+            is_test = self.IS_TEST
+        return self.TEST if is_test else self.TRAIN
 
-    # Inhert from other configs
+    # Inherit from other configs
     PARENT_CFG_NAME: str = "default"
 
     # Multiple GPUs
@@ -263,8 +269,11 @@ class Manager(Config, Logger):
         if (args.log or "").upper() in dir(LOG_LEVELS):
             self.log_level = LOG_LEVELS[args.log.upper()]
         if args.log_file:
-            self._log_file = Path(args.log_file)
-            self._log_file.parent.mkdir(parents=True, exist_ok=True)
+            self._log_file = Path(args.log_file).expanduser().absolute()
+            self.mkdir(self._log_file.parent)
+            if args.log_overwrite:
+                with self._log_file.open("w") as f:
+                    f.write("")
         if args.verbose:
             self.log_level = LOG_LEVELS.DEBUG
         if args.veryverbose:
@@ -272,6 +281,47 @@ class Manager(Config, Logger):
             self.log_level = LOG_LEVELS.DEBUG
         self._show_and_exit = bool(args.cfg_help)
         return self
+
+    @staticmethod
+    def synchronize(log: Logger):
+        """
+        Helper function to synchronize (barrier) among all processes
+        when using distributed training.
+        """
+        import torch.distributed as dist
+
+        if not dist.is_available():
+            log.warn(f"Distributed train failed: {dist.is_available()=}")
+            return
+        if not dist.is_initialized():
+            log.warn(f"Distributed train failed: {dist.is_initialized()=}")
+            return
+        world_size = dist.get_world_size()
+        if world_size == 1:
+            log.warn(f"Distributed train failed: {world_size=}")
+            return
+        log.info(f"{world_size=}")
+        dist.barrier()
+
+    def torch_setup_on_distributed(self, args: argparse.Namespace, log_base=Path("./logs")):
+        import torch
+        import torch.distributed as dist
+
+        self.LOCAL_RANK = int(os.environ.get("LOCAL_RANK", 0)) % torch.cuda.device_count()
+        torch.cuda.set_device(self.LOCAL_RANK)
+        dist.init_process_group(
+            backend="nccl",
+            init_method="env://",
+        )
+        self.synchronize(self.log)
+        if self.LOCAL_RANK != 0:
+            from mltemplate.utils.data_utils import valid_dir
+
+            args.log_file = valid_dir(log_base) / f"distributed-{self.LOCAL_RANK}.log"
+            args.log_overwrite = True
+            self._logger = None
+            self.argparse_manager(args)
+        self.log.info(f"Using DISTRIBUTED. {os.environ['LOCAL_RANK']=}, {os.environ['RANK']=}, {self.LOCAL_RANK=}")
 
     @staticmethod
     def setup_logger(level: int | LOG_LEVELS, use_rich=True, log_file: Optional[Path] = None):
@@ -331,9 +381,7 @@ class Manager(Config, Logger):
                 print(f"Merging config from '{cfg.PARENT_CFG_NAME}.yaml'")
             cfg.merge_from(parent_cfg)
 
-        assert (
-            cfg.EXP_NAME == args.EXP_NAME
-        ), f"Do not specify EXP_NAME inside {args.cfg_dir}, instead from command line."
+        assert cfg.EXP_NAME == args.EXP_NAME, f"Do not specify EXP_NAME inside {args.cfg_dir}, instead as cli option."
         return cfg
 
     @classmethod
@@ -342,6 +390,8 @@ class Manager(Config, Logger):
         unknown = default_unknown() + (_unknown or [])
         self = cls.argparse_config(args, unknown)
         self.argparse_manager(args)
+        if self.DISTRIBUTED and not self._show_and_exit:
+            self.torch_setup_on_distributed(args)
         return self
 
     def print_whole_config(self):
@@ -354,7 +404,7 @@ class Manager(Config, Logger):
     @property
     def log(self):
         if self._logger is None:
-            self._logger = self.setup_logger(self.log_level, self._use_rich)
+            self._logger = self.setup_logger(self.log_level, self._use_rich, self._log_file)
         return self._logger
 
     @property

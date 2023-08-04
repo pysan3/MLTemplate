@@ -80,10 +80,10 @@ def save_model(
         "recorder": recorder.state_dict(),
         "epoch": epoch,
     }
-    if last or epoch < 0:
-        torch.save(model, str(model_dir / "latest.pth"))
-    else:
-        torch.save(model, str(model_dir / f"{epoch:03}.pth"))
+    model_name = "latest" if last or epoch < 0 else f"{epoch:03}"
+    model_path = model_dir / f"{model_name}.pth"
+    torch.save(model, str(model_path))
+    log.info(f"Model saved to {model_path}")
 
     # remove previous pretrained model if the number ofmodels is too big
     pths = search_int_pths(model_dir)
@@ -94,14 +94,14 @@ def save_model(
     return min_pth
 
 
-def load_network_pth(log: Logger, net: Module, model_path: Path, resume=True, epoch=-1, strict=True):
+def load_network_pth(log: Logger, net: Module, model_path: Path):
     log.warn(f"Loading model: {model_path}")
     pretrained_model = torch.load(str(model_path), "cpu")
     net.load_state_dict(pretrained_model["net"])
     return pretrained_model["epoch"] + 1
 
 
-def load_network(log: Logger, net: Module, model_dir: Path, resume=True, epoch=-1, strict=True):
+def load_network(log: Logger, net: Module, model_dir: Path, resume=True, epoch=-1):
     if not resume:
         return 0
     if not model_dir.exists():
@@ -117,4 +117,4 @@ def load_network(log: Logger, net: Module, model_dir: Path, resume=True, epoch=-
     if model_path is None:
         log.warn(f"Cannot find best model in {model_dir}")
         return 0
-    return load_network_pth(log, net, model_path, resume, epoch, strict)
+    return load_network_pth(log, net, model_path)

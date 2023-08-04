@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Optional
 
+import torch
+
 from mltemplate.libs.network_wrapper import RenderStats
 
 if TYPE_CHECKING:
@@ -11,10 +13,10 @@ if TYPE_CHECKING:
     from torch.utils.data import DataLoader
 
     from mltemplate.libs.evaluator import Evaluator
-    from mltemplate.libs.loader.dataset_loader import AbstractDataset, DatasetType, DatasetTypeBatch
+    from mltemplate.libs.loader.dataset_loader import DatasetType, DatasetTypeBatch
     from mltemplate.libs.network_wrapper import NetworkWrapper, NetworkWrapperResult
     from mltemplate.libs.recorder import Recorder
-    from utils.manager import Manager
+    from mltemplate.utils.manager import Manager
 
 
 def now():
@@ -24,8 +26,6 @@ def now():
 def get_cuda_memory(force_cpu=False):
     if force_cpu:
         return []
-    import torch
-
     if not torch.cuda.is_available():
         return []
     from torch.cuda import max_memory_allocated
@@ -37,8 +37,6 @@ def get_cuda_memory(force_cpu=False):
 class Trainer(object):
     def __init__(self, mgr: Manager, net: Module):
         self.mgr = mgr
-        import torch
-
         if self.mgr.FORCE_CPU:
             self.device = torch.device("cpu")
         else:
@@ -49,25 +47,20 @@ class Trainer(object):
                 net_wrap,
                 device_ids=self.mgr.LOCAL_RANK,
                 output_device=self.mgr.LOCAL_RANK,
+                find_unused_parameters=True,
             )
-        self.network = net_wrap
-        self.LOCAL_RANK = self.mgr.LOCAL_RANK
-
-    def to_cuda(self, batch: list[DatasetType]):
-        return DatasetTypeBatch.from_list(batch)
+        self.netwrapper = net_wrap
 
     def train(self, epoch: int, data_loader: DataLoader[DatasetType], optimizer: Optimizer, recorder: Recorder):
         max_iter = len(data_loader)
-        self.network.train()
+        recorder.set_epoch(epoch)
+        self.netwrapper.train()
         start = now()
         for iteration, batch in enumerate(data_loader):
-            batch: list[DatasetType]
+            batch: DatasetTypeBatch
             data_time = now() - start
-            start = now()
-            # Convert list[data] -> data_batch
-            tbatch = self.to_cuda(batch)
             # Call network
-            result: NetworkWrapperResult = self.network(tbatch)
+            result: NetworkWrapperResult = self.netwrapper(batch)
             loss = result.loss
             optimizer.zero_grad()
             loss.backward()
@@ -78,7 +71,7 @@ class Trainer(object):
             # Update recorder loss status
             recorder.update_loss_stats(result.scalar.get_means().to_dict())
             # Record time elapsed
-            batch_time = now() - start
+            batch_time = now() - data_time - start
             recorder.batch_time.update(batch_time)
             recorder.data_time.update(data_time)
             # print training state
@@ -104,19 +97,16 @@ class Trainer(object):
         recorder: Optional[Recorder] = None,
         max_iter: int = -1,
     ):
-        import torch
-
-        self.network.eval()
+        self.netwrapper.eval()
         torch.cuda.empty_cache()
         val_loss_stats = {}
         data_size = len(data_loader)
         render_stats: Optional[RenderStats] = None
         for iteration, batch in enumerate(data_loader):
-            tbatch = self.to_cuda(batch)
             with torch.no_grad():
-                result: NetworkWrapperResult = self.network(tbatch)
+                result: NetworkWrapperResult = self.netwrapper(batch)
                 if evaluator is not None:
-                    evaluator.evaluate(result.result, tbatch, epoch, iteration)
+                    evaluator.evaluate(result.result, batch, epoch, iteration)
             for k, v in result.scalar.get_means().to_dict().items():
                 val_loss_stats.setdefault(k, 0)
                 val_loss_stats[k] += v
