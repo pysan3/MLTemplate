@@ -4,10 +4,12 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from mltemplate.libs.loader.dataset_loader import DatasetTypeBatch
+from .loader.dataset_loader import DatasetTypeBatch
 
 if TYPE_CHECKING:
-    from utils.manager import Manager
+    from torch import Tensor
+
+    from mltemplate.utils.manager import Manager
 
 
 class Renderer:
@@ -16,13 +18,12 @@ class Renderer:
         self.device = device
         self.net = net.to(self.device)
 
-    def render(self, batch: DatasetTypeBatch):
+    def render(self, batch: DatasetTypeBatch) -> Tensor:
         b, c, h, w = batch.img_batch.shape
         if self.mgr.veryverbose:
             print(f"Renderer.render: {b=}, {c=}, {h=}, {w=}")
         img = batch.img_batch.to(self.device)
-        result: torch.Tensor = self.net(img)
-        return result
+        return self.net(img)
 
 
 def make_renderer(mgr: Manager, net: torch.nn.Module, device: torch.device):

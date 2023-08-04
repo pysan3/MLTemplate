@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Type
 
 import torch
-from torch import Tensor
 
 if TYPE_CHECKING:
+    from torch import Tensor
     from torch.utils.data import Dataset
 
-    from utils.dataset_util import DatasetFile
-    from utils.manager import Manager
+    from mltemplate.utils.dataset_util import DatasetFile
+    from mltemplate.utils.manager import Manager
 
 
 @dataclass(repr=False, eq=False, order=False, unsafe_hash=False, slots=True)
@@ -19,35 +19,21 @@ class DatasetType:
     "file data index"
     img: Tensor
     "img loaded with torchvision.read_image. #[RGB, h, w]"
-    h: int
-    "img height"
-    w: int
-    "img width"
 
     @property
     def hw(self):
-        return (self.h, self.w)
-
-    @property
-    def hw_tn(self):
-        return torch.tensor(self.hw, dtype=torch.int32)
+        return torch.tensor(self.img.shape[1:], torch.int)
 
     @classmethod
     def from_datasetfile(cls, file: DatasetFile):
         from torchvision.io import read_image
 
         img = read_image(str(file.image))
-        _, h, w = img.shape
-        self = cls(
-            index=file.index,
-            img=img,
-            h=h,
-            w=w,
-        )
+        self = cls(index=file.index, img=img)
         return self
 
     def coord2pixel(self, coords: Tensor):
-        return coords * self.hw_tn[..., None]
+        return coords * self.hw.to(coords.device)[..., None]
 
     def pixel2index(self, pixels: Tensor):
         return pixels.clip_(torch.zeros(pixels.shape), self.coord2pixel(torch.ones(pixels.shape)))
@@ -59,10 +45,6 @@ class DatasetTypeBatch:
     "file data index"
     img_batch: Tensor
     "img loaded with torchvision.read_image. #[RGB, h, w]"
-    h_batch: Tensor
-    "img height"
-    w_batch: Tensor
-    "img width"
 
     def __len__(self):
         return self.index_batch.shape[0]
@@ -72,8 +54,6 @@ class DatasetTypeBatch:
         return cls(
             torch.tensor([d.index for d in data], dtype=torch.int32),
             torch.stack([d.img for d in data]),
-            torch.tensor([d.h for d in data]),
-            torch.tensor([d.w for d in data]),
         )
 
 
@@ -82,36 +62,31 @@ class DataAugment:
 
 
 class AbstractDataset(Dataset[DatasetType]):
-    def __init__(self, mgr: Manager, dataset: Optional[str] = None, is_train: Optional[bool] = None, post_args=None):
+    def __init__(
+        self,
+        mgr: Manager,
+        dataset: Optional[str] = None,
+        aug_class: Type[DataAugment] = DataAugment,
+        is_test: Optional[bool] = None,
+        post_args: Any = None,
+    ):
         self.mgr = mgr
-        self.is_train = is_train if is_train is not None else not mgr.IS_TEST
-        self.ds_mgr = mgr.TRAIN if self.is_train else mgr.TEST
+        self.aug_class = aug_class
+        self.is_test = is_test if is_test is not None else self.mgr.IS_TEST
+        self.ds_mgr = self.mgr.TEST if self.is_test else self.mgr.TRAIN
         self.ds_name = dataset or self.ds_mgr.DATASET
         self.data_files: list[DatasetFile] = []
         self.datas: list[DatasetType] = []
         self.post_init(post_args)
         if self.mgr.veryverbose:
-            self.mgr.info(f"Found {len(self) // DataAugment.data_per_img} datas.")
+            self.mgr.info(f"Found {len(self.data_files)} datas.")
         super().__init__()
 
     def post_init(self, post_args: Any):
-        raise NotImplementedError
+        raise NotImplementedError("Implement code to fill `self.data_files")
 
     def get_online(self, index):
         raise NotImplementedError
-
-    def __getitem__(self, index) -> DatasetType:
-        raise NotImplementedError
-
-    def __len__(self) -> int:
-        raise NotImplementedError
-
-
-class DatasetBase(AbstractDataset):
-    def get_online(self, index):
-        file = self.data_files[index]
-        data = DatasetType.from_datasetfile(file)
-        return data
 
     def __getitem__(self, index) -> DatasetType:
         if self.mgr.LOAD_DATA_ON_MEMORY:
@@ -120,4 +95,11 @@ class DatasetBase(AbstractDataset):
             return self.get_online(index)
 
     def __len__(self) -> int:
-        return len(self.data_files) * DataAugment.data_per_img
+        return len(self.data_files) * self.aug_class.data_per_img
+
+
+class DatasetBase(AbstractDataset):
+    def get_online(self, index):
+        file = self.data_files[index]
+        data = DatasetType.from_datasetfile(file)
+        return data

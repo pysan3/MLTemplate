@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import torch
-import torch.distributed as dist
-from rich import print
 from rich.traceback import install
 
 from .libs.evaluator import make_evaluator
@@ -20,37 +16,15 @@ from .utils.data_utils import local_iter
 from .utils.net_utils import load_model, load_network, save_model
 
 if TYPE_CHECKING:
-    from logging import Logger
-
-    from utils.manager import Manager
+    from .utils.manager import Manager
 
 
 install()
 
 
-def synchronize(log: Logger):
-    """
-    Helper function to synchronize (barrier) among all processes
-    when using distributed training.
-    """
-    if not dist.is_available():
-        log.warn(f"Distributed train failed: {dist.is_available()=}")
-        return
-    if not dist.is_initialized():
-        log.warn(f"Distributed train failed: {dist.is_initialized()=}")
-        return
-    world_size = dist.get_world_size()
-    if world_size == 1:
-        log.warn(f"Distributed train failed: {world_size=}")
-        return
-    log.info(f"{world_size=}")
-    log.info(f"{torch.cuda.memory_allocated()=}")
-    dist.barrier()
-
-
 def train(mgr: Manager):
-    train_loader = make_data_loader(mgr, is_train=True, is_distributed=mgr.DISTRIBUTED, max_iter=mgr.NUM_ITER_PER_EP)
-    val_loader = make_data_loader(mgr, is_train=False)
+    train_loader = make_data_loader(mgr, is_test=False, is_distributed=mgr.DISTRIBUTED, max_iter=mgr.NUM_ITER_PER_EP)
+    val_loader = make_data_loader(mgr, is_test=True)
 
     net = Network(mgr)
     trainer = make_trainer(mgr, net)
@@ -82,7 +56,7 @@ def train(mgr: Manager):
 
 
 def test(mgr: Manager):
-    val_loader = make_data_loader(mgr, is_train=False)
+    val_loader = make_data_loader(mgr, is_test=True)
 
     net = Network(mgr)
     trainer = make_trainer(mgr, net)
@@ -93,16 +67,6 @@ def test(mgr: Manager):
 
 def main(mgr: Manager):
     mgr.info(f"PWD={Path.cwd()}")
-    if mgr.DISTRIBUTED:
-        mgr.LOCAL_RANK = int(os.environ.get("RANK", 0)) % torch.cuda.device_count()
-        torch.cuda.set_device(mgr.LOCAL_RANK)
-        dist.init_process_group(
-            backend="nccl",
-            init_method="env://",
-        )
-        synchronize(mgr)
-        print(f"Using DISTRIBUTED. env: {os.environ['LOCAL_RANK']}, {os.environ['RANK']}, {mgr.LOCAL_RANK=}")
-
     if mgr.IS_TEST:
         mgr.info("Running Test")
         test(mgr)
@@ -112,7 +76,7 @@ def main(mgr: Manager):
 
 
 def run():
-    from utils.manager import Manager
+    from mltemplate.utils.manager import Manager
 
     mgr = Manager.argparse()
     mgr.print_whole_config()

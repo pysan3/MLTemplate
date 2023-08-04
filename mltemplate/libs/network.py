@@ -3,12 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import torch.nn as nn
-from torch import Tensor
 
 if TYPE_CHECKING:
+    from torch import Tensor
     from torchvision import models
 
-    from utils.manager import Manager
+    from mltemplate.utils.manager import Manager
 
 
 class ResNetBackBone(nn.Module):
@@ -81,18 +81,18 @@ class Network(nn.Module):
                 activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True
             ) as prof:
                 with record_function("model_inference"):
-                    result = self.bb(img_batch)
+                    result: Tensor = self.bb(img_batch)
             print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=10))
             if not self.mgr.FORCE_CPU:
                 from torch.cuda import memory_summary
 
                 print(memory_summary())
         else:
-            result = self.bb(img_batch)
+            result: Tensor = self.bb(img_batch)
         result = result.view(-1, self.bb_out_size)
         result = self.main(result)
         result = result.view(-1, 3, self.num_out)
         if self.report_network_summary:
             print(f"{self.__class__.__name__}.forward: x={img_batch.shape} -> result={result.shape}")
-        self.report_network_summary = False  # Show info only on the first time
+            self.report_network_summary = False  # Show info only on the first time
         return result

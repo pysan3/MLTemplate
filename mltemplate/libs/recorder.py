@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from torch import Tensor
 
 if TYPE_CHECKING:
-    from utils.manager import Manager
+    from mltemplate.utils.manager import Manager
 
 
 class SmoothedValue(object):
@@ -48,10 +48,8 @@ STATS_T = dict[str, Tensor | SmoothedValue]
 class Recorder:
     def __init__(self, mgr: Manager) -> None:
         self.mgr = mgr
-        if self.mgr.LOCAL_RANK > 0:
-            return
         log_dir = self.mgr.RECORD_DIR
-        if not self.mgr.RESUME:
+        if not self.mgr.RESUME and self.mgr.LOCAL_RANK == 0:
             self.mgr.warn(f"Removing contents in {log_dir}")
             os.system(f"rm -rf {str(log_dir)}/*")
         from torch.utils.tensorboard.writer import SummaryWriter
@@ -73,8 +71,6 @@ class Recorder:
         self.epoch = epoch
 
     def update_loss_stats(self, loss_dict: dict[str, Tensor]):
-        if self.mgr.LOCAL_RANK > 0:
-            return
         for k, v in loss_dict.items():
             if not isinstance(v, Tensor):
                 continue
@@ -99,25 +95,18 @@ class Recorder:
             self.writer.add_image(f"{prefix}/{k}", v, step)
 
     def state_dict(self):
-        if self.mgr.LOCAL_RANK > 0:
-            return
         return {"step": self.step}
 
     def load_state_dict(self, scalar_dict):
-        if self.mgr.LOCAL_RANK > 0:
-            return
         self.step = scalar_dict["step"]
 
     def __str__(self) -> str:
-        if self.mgr.LOCAL_RANK > 0:
-            return ""
-        states = []
-        states.append(f"epoch {self.epoch: 4d}")
-        states.append(f"step {self.step:>5}")
-        for k, v in self.loss_stats.items():
-            states.append(f"{k} {v.mean:.5e}")
-        states.append(f"dataload {self.data_time.mean:.4f} sec")
-        states.append(f"makebatch {self.batch_time.mean:.4f} sec")
+        states: list[str] = []
+        states.append(f"ep {self.epoch: 4d}")
+        states.append(f"st {self.step:>5}")
+        states.extend([f"{k} {v.mean:.5e}" for k, v in self.loss_stats.items()])
+        states.append(f"data_sec {self.data_time.mean:.4f}")
+        states.append(f"batch_sec {self.batch_time.mean:.4f}")
         return ", ".join(states)
 
 

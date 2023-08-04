@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from torch.nn import Module
 
 if TYPE_CHECKING:
-    from utils.manager import Manager
+    from mltemplate.utils.manager import Manager
 
 
 def make_optimizer(mgr: Manager, net: Module, lr=None, weight_decay=None):
