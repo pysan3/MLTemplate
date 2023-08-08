@@ -13,6 +13,8 @@ from hydra import compose
 from hydra.initialize import initialize_config_dir
 from omegaconf import DictConfig
 
+from .data_utils import valid_dir
+
 if TYPE_CHECKING:
     from logging import Logger
 
@@ -61,12 +63,6 @@ def default_unknown():
 @dataclass(repr=False, eq=False, order=False, unsafe_hash=False, slots=True)
 class BaseConfig:
     _frozen_properties = {}
-
-    @staticmethod
-    def mkdir(dir_path: Path):
-        from .data_utils import valid_dir
-
-        return valid_dir(dir_path)
 
     def merge_from(self, o: BaseConfig | DictConfig):
         attributes = set(dir(self))
@@ -221,15 +217,15 @@ class Config(BaseConfig):
 
     @property
     def TRAINED_MODEL_DIR(self):
-        return self.mkdir(Path(self.TRAINED_MODEL_DIR_BASE) / self.EXP_NAME)
+        return valid_dir(self.TRAINED_MODEL_DIR_BASE) / self.EXP_NAME
 
     @property
     def RECORD_DIR(self):
-        return self.mkdir(Path(self.RECORD_DIR_BASE) / self.EXP_NAME)
+        return valid_dir(self.RECORD_DIR_BASE) / self.EXP_NAME
 
     @property
     def RESULT_DIR(self):
-        return self.mkdir(Path(self.RESULT_DIR_BASE) / self.EXP_NAME)
+        return valid_dir(self.RESULT_DIR_BASE) / self.EXP_NAME
 
 
 class Manager(Config, Logger):
@@ -270,7 +266,7 @@ class Manager(Config, Logger):
             self.log_level = LOG_LEVELS[args.log.upper()]
         if args.log_file:
             self._log_file = Path(args.log_file).expanduser().absolute()
-            self.mkdir(self._log_file.parent)
+            valid_dir(self._log_file.parent)
             if args.log_overwrite:
                 with self._log_file.open("w") as f:
                     f.write("")
@@ -354,9 +350,10 @@ class Manager(Config, Logger):
     @classmethod
     def argparse_config(cls, args: argparse.Namespace, unknown: list[str] = []):
         assert len(args.exp_name or "") > 0, "Specify `exp_name`."
-        assert len(args.cfg_dir or "") and Path(args.cfg_dir).exists(), f"--cfg_dir={args.cfg_dir} does not exist."
+        assert "/" not in args.exp_name, "`exp_name` cannot contain `/`."
+        cfg_dir = valid_dir(args.cfg_dir, False)
+        assert len(args.cfg_dir or "") and cfg_dir.exists(), f"--cfg_dir={args.cfg_dir} does not exist."
 
-        cfg_dir = Path(args.cfg_dir)
         initialize_config_dir(version_base=None, config_dir=str(cfg_dir.absolute()), job_name=args.exp_name)
         unknown_pplus = ["++" + a.split("+")[-1] for a in unknown]
         base_config: DictConfig = compose(config_name=args.cfg_name, overrides=unknown_pplus)
