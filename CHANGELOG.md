@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/pysan3/MLTemplate/compare/v1.1.0...v1.1.1) (2023-08-08)
+
+
+### Bug Fixes
+
+* **manager:** disable `exp_name` containing '/' ([#4](https://github.com/pysan3/MLTemplate/issues/4)) ([46d950d](https://github.com/pysan3/MLTemplate/commit/46d950d11e8c5c23c22fba5f6248d18bbcce34da))
+
 ## [1.1.0](https://github.com/pysan3/MLTemplate/compare/v1.0.0...v1.1.0) (2023-08-04)
 
 
