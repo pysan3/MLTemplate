@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/pysan3/MLTemplate/compare/v1.1.1...v1.1.2) (2023-08-08)
+
+
+### Bug Fixes
+
+* **poetry:** update package versions to solve dep vulnerabilities ([7070fa0](https://github.com/pysan3/MLTemplate/commit/7070fa0b5b65d1b8400a2fe96dd481481f6d167e))
+
 ## [1.1.1](https://github.com/pysan3/MLTemplate/compare/v1.1.0...v1.1.1) (2023-08-08)
 
 
