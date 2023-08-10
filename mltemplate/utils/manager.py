@@ -58,7 +58,7 @@ def default_unknown():
 class BaseConfig:
     _frozen_properties = {}
 
-    def merge_from(self, o: BaseConfig | DictConfig):
+    def merge_from(self, o: BaseConfig | DictConfig, printf: Callable[[str], None] = print):
         attributes = set(dir(self))
         for key in dir(o):
             if key not in attributes or key in self._frozen_properties or key.upper() != key:
@@ -70,9 +70,9 @@ class BaseConfig:
             else:
                 setattr(self, key, o_attr)
                 if getattr(self, "cfg_help", default_args().cfg_help):
-                    print(f"Update {key}: {s_attr} -> {o_attr}")
+                    printf(f"Update {key}: {s_attr} -> {o_attr}")
 
-    def print_config(self, indent=0):
+    def print_config(self, indent=0, printf: Callable[[str], None] = print):
         for key in asdict(self).keys():
             if key.startswith("_"):
                 continue
@@ -80,10 +80,10 @@ class BaseConfig:
                 continue
             value = getattr(self, key)
             if isinstance(value, BaseConfig):
-                print("  " * indent + f"{key}: [yellow]{value.__class__.__name__}[/]")
-                value.print_config(indent + 1)
+                printf("  " * indent + f"{key}: [yellow]{value.__class__.__name__}[/]")
+                value.print_config(indent + 1, printf)
             else:
-                print("  " * indent + f"{key}: {value}")
+                printf("  " * indent + f"{key}: {value}")
 
 
 @dataclass(repr=False, eq=False, order=False, unsafe_hash=False, slots=True)
@@ -320,10 +320,9 @@ class Manager(Config, Logger):
         log.handlers.clear()
         if use_rich:
             from rich.highlighter import ReprHighlighter
+            from rich.logging import RichHandler
 
-            from .rich_logger import MyRichHandler
-
-            ch = MyRichHandler(
+            ch = RichHandler(
                 log_time_format="[%X]",
                 markup=True,
                 highlighter=ReprHighlighter(),
@@ -367,10 +366,11 @@ class Manager(Config, Logger):
             merge_config_list.append(parent_cfg)
         else:
             raise RuntimeError("Too much recursion of PARENT_CFG_NAME. Maximum 10.")
+        printf = print if args.verbose or args.veryverbose or args.cfg_help else lambda *_: None
         for parent_cfg in reversed(merge_config_list):
             if len(cfg.PARENT_CFG_NAME or "") > 0 and args.verbose:
-                print(f"Merging config from '{cfg.PARENT_CFG_NAME}.yaml'")
-            cfg.merge_from(parent_cfg)
+                printf(f"Merging config from '{cfg.PARENT_CFG_NAME}.yaml'")
+            cfg.merge_from(parent_cfg, printf)
 
         assert cfg.EXP_NAME == args.EXP_NAME, f"Do not specify EXP_NAME inside {args.cfg_dir}, instead as cli option."
         return cfg
@@ -385,10 +385,10 @@ class Manager(Config, Logger):
             self.torch_setup_on_distributed(args)
         return self
 
-    def print_whole_config(self):
+    def print_whole_config(self, printf: Callable[[str], None] = print):
         train_or_test = "test" if self.IS_TEST else "train"
         self.log.info(f"==== [red]{self.EXP_NAME}[/]: {train_or_test} -> '{self.RESULT_DIR}/' ====")
-        self.print_config()
+        self.print_config(printf=printf)
         if self._show_and_exit:
             sys.exit(0)
 
