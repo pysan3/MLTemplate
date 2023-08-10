@@ -5,13 +5,12 @@ from typing import TYPE_CHECKING, Callable
 
 import torch
 import torch.nn as nn
+from torch import Tensor
 
 from .loader.dataset_loader import DatasetTypeBatch
 from .renderer import make_renderer
 
 if TYPE_CHECKING:
-    from torch import Tensor
-
     from mltemplate.utils.manager import Manager
 
 CRT_T = Callable[[Tensor, Tensor], Tensor]

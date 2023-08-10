@@ -5,18 +5,16 @@ import os
 import sys
 from dataclasses import asdict, dataclass, field
 from enum import IntEnum
-from logging import getLogger
+from logging import Logger, getLogger
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import Callable, Optional
 
 from hydra import compose
 from hydra.initialize import initialize_config_dir
 from omegaconf import DictConfig
+from rich import print
 
 from .data_utils import valid_dir
-
-if TYPE_CHECKING:
-    from logging import Logger
 
 
 class LOG_LEVELS(IntEnum):
@@ -372,7 +370,7 @@ class Manager(Config, Logger):
                 printf(f"Merging config from '{cfg.PARENT_CFG_NAME}.yaml'")
             cfg.merge_from(parent_cfg, printf)
 
-        assert cfg.EXP_NAME == args.EXP_NAME, f"Do not specify EXP_NAME inside {args.cfg_dir}, instead as cli option."
+        assert cfg.EXP_NAME == args.exp_name, f"Do not specify EXP_NAME inside {args.cfg_dir}, instead as cli option."
         return cfg
 
     @classmethod

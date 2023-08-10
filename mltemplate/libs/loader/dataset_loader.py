@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional, Type
 
 import torch
+from torch.utils.data import Dataset
 
 if TYPE_CHECKING:
     from torch import Tensor
-    from torch.utils.data import Dataset
 
     from mltemplate.utils.dataset_util import DatasetFile
     from mltemplate.utils.manager import Manager

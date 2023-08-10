@@ -6,12 +6,10 @@ import torch.utils.data as data
 
 from . import samplers
 from .collator import collate
-from .dataset_loader import DataAugment
+from .dataset_loader import AbstractDataset, DataAugment
 
 if TYPE_CHECKING:
     from mltemplate.utils.manager import Manager
-
-    from .dataset_loader import AbstractDataset
 
 
 def make_dataset(
