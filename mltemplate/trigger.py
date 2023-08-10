@@ -76,8 +76,10 @@ def main(mgr: Manager):
 
 
 def run():
+    from rich import print
+
     from mltemplate.utils.manager import Manager
 
     mgr = Manager.argparse()
-    mgr.print_whole_config()
+    mgr.print_whole_config(print)
     main(mgr)

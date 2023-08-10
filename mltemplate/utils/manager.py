@@ -34,7 +34,7 @@ parser.add_argument("--cfg_dir", default="configs", type=str)
 parser.add_argument("--cfg_help", action="store_true", help="Show config and exit.")
 parser.add_argument("--test", action="store_true", dest="test", default=False)
 parser.add_argument("--local_rank", type=int, default=0, help="GPU local rank.")
-parser.add_argument("-l", "--log", type=str, default=LOG_LEVELS.WARN.name.lower(),
+parser.add_argument("-l", "--log", type=str, default=LOG_LEVELS.INFO.name.lower(),
                     choices=[e.name.lower() for e in list(LOG_LEVELS)], help="Set logging level.")  # fmt: skip
 parser.add_argument("--log_file", type=str, default="", help="If set, logging will be output to file.")
 parser.add_argument("--log_overwrite", action="store_true", help="Will overwrite log file from the beginning.")
