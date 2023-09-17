@@ -108,10 +108,12 @@ ENV/
 
 # Session
 Session.vim
+!.vim
+.vim/*
+!.vim/local.lua
 
 # Temporary
 .netrwhist
-*~
 # Auto-generated tag files
 tags
 
