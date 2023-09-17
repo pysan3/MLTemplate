@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.4](https://github.com/pysan3/MLTemplate/compare/v1.1.3...v1.1.4) (2023-09-17)
+
+
+### Bug Fixes
+
+* **vim:** share vim config ([02fd529](https://github.com/pysan3/MLTemplate/commit/02fd529bb16927bceb1e66b7066ec99ff2022e43))
+
 ## [1.1.3](https://github.com/pysan3/MLTemplate/compare/v1.1.2...v1.1.3) (2023-08-10)
 
 
